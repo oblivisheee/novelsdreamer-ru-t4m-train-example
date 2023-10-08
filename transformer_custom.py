@@ -168,3 +168,4 @@ class Transformer(layers.Layer):
         dec_output, attention_weights = self.decoder(tar, enc_output, training, look_ahead_mask, dec_padding_mask)
         final_output = self.final_layer(dec_output)
         return final_output, attention_weights
+
