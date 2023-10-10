@@ -23,9 +23,16 @@ class TextPreprocessor:
     def load_text_files(self):
         for text_files_path in self.text_files_paths:
             if text_files_path:
-                self.datasets.append(self._load_text_file(text_files_path))
+                self.datasets.append(self._load_text_files(text_files_path))
 
-    def _load_text_file(self, text_files_path):
+    def _load_text_files(self, text_files_path):
+        classes = os.listdir(text_files_path)
+        for class_name in classes:
+            class_path = os.path.join(text_files_path, class_name)
+            if os.path.isdir(class_path):
+                self.datasets.append(self._load_text_file(class_path, class_name))
+
+    def _load_text_file(self, text_files_path, class_name):
         return tf.data.TextLineDataset(
             tf.data.Dataset.list_files(os.path.join(text_files_path, '*.txt'))
         )
@@ -72,11 +79,18 @@ class TextClass(TextPreprocessor):
     def load_text_files(self):
         for text_files_path in self.text_files_paths:
             if text_files_path:
-                self.datasets.append(self._load_text_file(text_files_path, self.class_name))
+                self.datasets.append(self._load_text_files(text_files_path))
+
+    def _load_text_files(self, text_files_path):
+        classes = os.listdir(text_files_path)
+        for class_name in classes:
+            class_path = os.path.join(text_files_path, class_name)
+            if os.path.isdir(class_path):
+                self.datasets.append(self._load_text_file(class_path, class_name))
 
     def _load_text_file(self, text_files_path, class_name):
         return tf.data.TextLineDataset(
-            tf.data.Dataset.list_files(os.path.join(text_files_path, class_name, '*.txt'))
+            tf.data.Dataset.list_files(os.path.join(text_files_path, '*.txt'))
         )
 
 class EnglishTexts(TextClass):
@@ -86,3 +100,4 @@ class EnglishTexts(TextClass):
 class RussianTexts(TextClass):
     def __init__(self, class_name, dataset_names=None, text_files_paths=None):
         super().__init__(class_name, dataset_names, text_files_paths)
+
