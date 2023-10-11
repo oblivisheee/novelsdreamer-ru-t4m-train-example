@@ -26,7 +26,7 @@ class TextPreprocess:
         return self.datasets
     def load_text_files(self, text_files_path):
         if text_files_path:
-            self.datasets.append(self._load_text_files(text_files_path))
+            self.datasets = self.datasets + self._load_text_files(text_files_path)
 
     def _load_text_files(self, text_files_path):
         return tf.data.Dataset.list_files(os.path.join(text_files_path, '*.txt')).interleave(
@@ -40,4 +40,5 @@ class TextClass(TextPreprocess):
     def __init__(self, class_name, dataset):
         super().__init__(dataset)
         self.class_name = class_name
+
 
