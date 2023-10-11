@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
+from math import log
 from safetensors.tensorflow import save_file
 # Positional Encoding
 def get_angles(pos, i, d_model):
