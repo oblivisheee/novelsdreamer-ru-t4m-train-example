@@ -1,7 +1,8 @@
 from tensorflow.keras import regularizers
+import tensorflow as tf
 
 class RegularizedDenseLayer(tf.keras.layers.Layer):
-    def __init__(self, units, l1=0.01, l2=0.01):
+    def __init__(self, units, l1=0.001, l2=0.001):
         super(RegularizedDenseLayer, self).__init__()
         self.units = units
         self.l1 = l1
@@ -15,3 +16,4 @@ class RegularizedDenseLayer(tf.keras.layers.Layer):
 
     def call(self, inputs):
         return tf.matmul(inputs, self.w)
+
