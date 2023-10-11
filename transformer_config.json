@@ -1,1 +1,1 @@
-{"num_layers": 256, "d_model": 256, "dff": 512, "num_heads": 8, "dropout_rate": 0.1, "input_vocab_size": 8500, "target_vocab_size": 8000, "maximum_position_encoding": 10000, "batch_size": 32, "tar_seq_len": 16}
+{"num_layers": 256, "d_model": 256, "dff": 512, "num_heads": 32, "dropout_rate": 0.2, "input_vocab_size": 100000000, "target_vocab_size": 90950000, "maximum_position_encoding": 100000, "batch_size": 32, "tar_seq_len": 16}
