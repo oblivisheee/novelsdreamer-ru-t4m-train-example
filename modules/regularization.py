@@ -10,7 +10,7 @@ class RegularizedDenseLayer(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.w = self.add_weight(shape=(input_shape[-1], self.units),
-                                 initializer='random_normal',
+                                 initializer='he_uniform',
                                  trainable=True,
                                  regularizer=regularizers.l1_l2(l1=self.l1, l2=self.l2))
 

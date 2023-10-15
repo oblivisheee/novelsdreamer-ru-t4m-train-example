@@ -2,7 +2,7 @@ import os
 import json
 
 def transformer_config():
-    path_to_config_transformer = './transformer_config.json'
+    path_to_config_transformer = os.path.join('config', 'transformer_config.json')
     config = {
         "num_layers": 4,
         "d_model": 128,
@@ -31,7 +31,7 @@ def transformer_config():
     return config
 
 def trainer_config():
-    path_to_config_of_train = './train_config.json'
+    path_to_config_of_train = os.path.join('config', 'train_config.json')
     config = {
         "learning_rate":  0.001,
         "loss_reduction": 'auto',

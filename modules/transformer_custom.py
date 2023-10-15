@@ -31,7 +31,7 @@ def scaled_dot_product_attention(q, k, v, mask):
 
 # Multi-head Attention
 class MultiHeadAttention(layers.Layer):
-    def __init__(self, d_model, num_heads):
+    def __init__(self, d_model, num_heads, embedding=None):
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads
         self.d_model = d_model
@@ -41,6 +41,7 @@ class MultiHeadAttention(layers.Layer):
         self.wk = layers.Dense(d_model)
         self.wv = layers.Dense(d_model)
         self.dense = layers.Dense(d_model)
+        self.embedding = embedding
 
     def split_heads(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
@@ -67,9 +68,9 @@ def point_wise_feed_forward_network(d_model, dff):
     ])
 
 class EncoderLayer(layers.Layer):
-    def __init__(self, d_model, num_heads, dff, rate=0.1):
+    def __init__(self, d_model, num_heads, dff, rate=0.1, embedding=None):
         super(EncoderLayer, self).__init__()
-        self.mha = MultiHeadAttention(d_model, num_heads)
+        self.mha = MultiHeadAttention(d_model, num_heads, embedding)
         self.ffn = point_wise_feed_forward_network(d_model, dff)
         self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
@@ -87,10 +88,10 @@ class EncoderLayer(layers.Layer):
 
 # Decoder Layer
 class DecoderLayer(layers.Layer):
-    def __init__(self, d_model, num_heads, dff, rate=0.1):
+    def __init__(self, d_model, num_heads, dff, rate=0.1, embedding=None):
         super(DecoderLayer, self).__init__()
-        self.mha1 = MultiHeadAttention(d_model, num_heads)
-        self.mha2 = MultiHeadAttention(d_model, num_heads)
+        self.mha1 = MultiHeadAttention(d_model, num_heads, embedding)
+        self.mha2 = MultiHeadAttention(d_model, num_heads, embedding)
         self.ffn = point_wise_feed_forward_network(d_model, dff)
         self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
@@ -113,13 +114,13 @@ class DecoderLayer(layers.Layer):
 
 # Encoder
 class Encoder(layers.Layer):
-    def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, maximum_position_encoding, rate=0.1):
+    def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, maximum_position_encoding, rate=0.1, embedding=None):
         super(Encoder, self).__init__()
         self.d_model = d_model
         self.num_layers = num_layers
-        self.embedding = layers.Embedding(input_vocab_size, d_model)
+        self.embedding = layers.Embedding(input_vocab_size, d_model) if embedding is None else embedding
         self.pos_encoding = positional_encoding(maximum_position_encoding, self.d_model)
-        self.enc_layers = [EncoderLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)]
+        self.enc_layers = [EncoderLayer(d_model, num_heads, dff, rate, embedding) for _ in range(num_layers)]
         self.dropout = layers.Dropout(rate)
 
     def call(self, x, training, mask):
@@ -134,13 +135,13 @@ class Encoder(layers.Layer):
 
 # Decoder
 class Decoder(layers.Layer):
-    def __init__(self, num_layers, d_model, num_heads, dff, target_vocab_size, maximum_position_encoding, rate=0.1):
+    def __init__(self, num_layers, d_model, num_heads, dff, target_vocab_size, maximum_position_encoding, rate=0.1, embedding=None):
         super(Decoder, self).__init__()
         self.d_model = d_model
         self.num_layers = num_layers
-        self.embedding = layers.Embedding(target_vocab_size, d_model)
+        self.embedding = layers.Embedding(target_vocab_size, d_model) if embedding is None else embedding
         self.pos_encoding = positional_encoding(maximum_position_encoding, self.d_model)
-        self.dec_layers = [DecoderLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)]
+        self.dec_layers = [DecoderLayer(d_model, num_heads, dff, rate, embedding) for _ in range(num_layers)]
         self.dropout = layers.Dropout(rate)
 
     def call(self, x, enc_output, training, look_ahead_mask, padding_mask):
@@ -157,12 +158,12 @@ class Decoder(layers.Layer):
         return x, attention_weights
 
 # Transformer
-class Transformer(layers.Layer):
-    def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1):
+class Transformer(tf.keras.Model):
+    def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None):
         super(Transformer, self).__init__()
-        self.encoder = Encoder(num_layers, d_model, num_heads, dff, input_vocab_size, pe_input, rate)
-        self.decoder = Decoder(num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate)
-        self.final_layer = layers.Dense(target_vocab_size)
+        self.encoder = Encoder(num_layers, d_model, num_heads, dff, input_vocab_size, pe_input, rate, embedding)
+        self.decoder = Decoder(num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, embedding)
+        self.final_layer = tf.keras.layers.Dense(target_vocab_size)
 
     def call(self, inp, tar, training, enc_padding_mask, look_ahead_mask, dec_padding_mask):
         enc_output = self.encoder(inp, training, enc_padding_mask)
@@ -172,6 +173,10 @@ class Transformer(layers.Layer):
 
     @staticmethod
     def save_model(model, name):
+        """
+        Saving model with safetensors extension.
+        >>> transformer.save_model(model, name)
+        """
         from safetensors.tensorflow import save_file
         save_file(model, name)
         return

@@ -1,5 +1,6 @@
-*__pycache__
-*Collatz_hypothesis.py
-*dataset
+__pycache__
+Collatz_hypothesis.py
+dataset
 __pycache__/tf_text_preprocess.cpython-311.pyc
 __pycache__/transformer_custom.cpython-311.pyc
+archive
