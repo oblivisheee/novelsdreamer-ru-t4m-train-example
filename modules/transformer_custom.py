@@ -3,7 +3,6 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 from math import log
-from safetensors.tensorflow import save_file
 # Positional Encoding
 def get_angles(pos, i, d_model):
     angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
@@ -159,6 +158,9 @@ class Decoder(layers.Layer):
 
 # Transformer
 class Transformer(tf.keras.Model):
+    """
+    Intialization transformer layer. Contain Encoder, Decoder and MultiHeadAttention.
+    """
     def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None):
         super(Transformer, self).__init__()
         self.encoder = Encoder(num_layers, d_model, num_heads, dff, input_vocab_size, pe_input, rate, embedding)
@@ -171,6 +173,19 @@ class Transformer(tf.keras.Model):
         final_output = self.final_layer(dec_output)
         return final_output, attention_weights
 
+    def beam_search_decoder(self, data, k):
+        sequences = [[list(), 1.0]]
+        for row in data:
+            all_candidates = list()
+            for i in range(len(sequences)):
+                seq, score = sequences[i]
+                for j in range(len(row)):
+                    candidate = [seq + [j], score * -log(row[j])]
+                    all_candidates.append(candidate)
+            ordered = sorted(all_candidates, key=lambda tup:tup[1])
+            sequences = ordered[:k]
+        return sequences
+
     @staticmethod
     def save_model(model, name):
         """
@@ -181,16 +196,80 @@ class Transformer(tf.keras.Model):
         save_file(model, name)
         return
 
-# Beam Search
-def beam_search_decoder(data, k):
-    sequences = [[list(), 1.0]]
-    for row in data:
-        all_candidates = list()
-        for i in range(len(sequences)):
-            seq, score = sequences[i]
-            for j in range(len(row)):
-                candidate = [seq + [j], score * -log(row[j])]
-                all_candidates.append(candidate)
-        ordered = sorted(all_candidates, key=lambda tup:tup[1])
-        sequences = ordered[:k]
-    return sequences
+    def fit_and_save(self, train_english, train_russian, valid_english, valid_russian, epochs, model_name, save_model_each_epoch=False, logs=True, logs_path= '/logs/plots'):
+        """
+        Fit the model to the data and save the model.
+        """
+        import matplotlib.pyplot as plt
+        import os
+
+        for epoch in range(epochs):
+            # Ensure the data is in the correct format before creating masks
+            train_english_int = tf.cast(train_english, tf.int32)
+            train_russian_int = tf.cast(train_russian, tf.int32)
+            enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_int, train_russian_int)
+            predictions, _ = self.call(train_english_int, train_russian_int, True, enc_padding_mask, combined_mask, dec_padding_mask)
+            loss = self.loss_function(train_russian_int, predictions)
+            gradients = self.tape.gradient(loss, self.trainable_variables)
+            self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+            
+            # Validation
+            valid_english_int = tf.cast(valid_english, tf.int32)
+            valid_russian_int = tf.cast(valid_russian, tf.int32)
+            enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(valid_english_int, valid_russian_int)
+            predictions_valid, _ = self.call(valid_english_int, valid_russian_int, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
+            loss_valid = self.loss_function(valid_russian_int, predictions_valid)
+            print('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch + 1, loss, loss_valid))
+            if logs:
+                # Plotting and saving dot diagram
+                plt.figure(figsize=(10, 5))
+                plt.plot(predictions_valid, 'ro')
+                plt.title('Dot Diagram of Predictions')
+                plt.xlabel('Index')
+                plt.ylabel('Prediction')
+                plt.grid(True)
+                if not os.path.exists('plots'):
+                    os.makedirs('plots')
+                plt.savefig(os.path.join(logs_path ,f'plots/dot_diagram_epoch_{epoch+1}.png'))
+                plt.close()
+
+            if save_model_each_epoch:
+                epoch += 1
+                
+                self.save_model(self, f'{model_name}_epoch_{epoch+1}')
+        
+        # Save the model after training
+        try:
+            self.save_model(self, model_name)
+            print('Final weights saved.')
+        except:
+            print('Happened an error during saving final weights.')
+        return
+
+    def create_masks(self, inp, tar):
+        """
+        Create masks for training.
+        """
+        enc_padding_mask = self.create_padding_mask(inp)
+        dec_padding_mask = self.create_padding_mask(inp)
+        look_ahead_mask = self.create_look_ahead_mask(tf.shape(tar)[1])
+        dec_target_padding_mask = self.create_padding_mask(tar)
+        combined_mask = tf.maximum(dec_target_padding_mask, look_ahead_mask)
+        return enc_padding_mask, combined_mask, dec_padding_mask
+
+    @staticmethod
+    def create_padding_mask(seq):
+        """
+        Create padding mask for sequence.
+        """
+        seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
+        return seq[:, tf.newaxis, tf.newaxis, :]
+
+    @staticmethod
+    def create_look_ahead_mask(size):
+        """
+        Create look ahead mask for sequence.
+        """
+        mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
+        return mask
+
