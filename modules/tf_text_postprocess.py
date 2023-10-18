@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
+import numpy 
 
 class TextPostprocessor:
     def __init__(self, tokenizer: Tokenizer):
@@ -7,6 +8,7 @@ class TextPostprocessor:
             raise ValueError("tokenizer must be an instance of Tokenizer class")
         self.tokenizer = tokenizer
 
+    @tf.function
     def sequences_to_texts(self, sequences):
         if not isinstance(sequences, (list, tf.Tensor)):
             raise ValueError("sequences must be a list or a Tensor")
