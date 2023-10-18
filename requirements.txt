@@ -1,0 +1,6 @@
+tensorflow
+safetensors
+keras
+numpy
+matplotlib
+tensorboard
