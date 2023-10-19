@@ -196,7 +196,7 @@ class Transformer(tf.keras.Model):
         save_file(model, name)
         return
 
-    def fit_and_save(self, train_english, train_russian, valid_english, valid_russian, epochs, model_name, save_model_each_epoch=False, logs=True, logs_path= '/logs/plots'):
+    def fit_model(self, train_english, train_russian, valid_english, valid_russian, epochs, model_name, save_model_each_epoch=False, logs=True, logs_path= '/logs/plots'):
         """
         Fit the model to the data and save the model.
         """
@@ -205,8 +205,8 @@ class Transformer(tf.keras.Model):
 
         for epoch in range(epochs):
             # Ensure the data is in the correct format before creating masks
-            train_english_int = tf.cast(train_english, tf.int32)
-            train_russian_int = tf.cast(train_russian, tf.int32)
+            train_english_int = tf.strings.as_string(tf.cast(train_english, tf.int32), precision=-1, scientific=False)
+            train_russian_int = tf.strings.as_string(tf.cast(train_russian, tf.int32), precision=-1, scientific=False)
             enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_int, train_russian_int)
             predictions, _ = self.call(train_english_int, train_russian_int, True, enc_padding_mask, combined_mask, dec_padding_mask)
             loss = self.loss_function(train_russian_int, predictions)
@@ -214,8 +214,8 @@ class Transformer(tf.keras.Model):
             self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
             
             # Validation
-            valid_english_int = tf.cast(valid_english, tf.int32)
-            valid_russian_int = tf.cast(valid_russian, tf.int32)
+            valid_english_int = tf.strings.as_string(tf.cast(valid_english, tf.int32), precision=-1, scientific=False)
+            valid_russian_int = tf.strings.as_string(tf.cast(valid_russian, tf.int32), precision=-1, scientific=False)
             enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(valid_english_int, valid_russian_int)
             predictions_valid, _ = self.call(valid_english_int, valid_russian_int, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
             loss_valid = self.loss_function(valid_russian_int, predictions_valid)
@@ -244,7 +244,8 @@ class Transformer(tf.keras.Model):
             print('Final weights saved.')
         except:
             print('Happened an error during saving final weights.')
-        return
+            
+        return self
 
     def create_masks(self, inp, tar):
         """
