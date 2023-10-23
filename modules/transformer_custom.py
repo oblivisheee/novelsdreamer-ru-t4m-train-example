@@ -1,8 +1,12 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+from modules.logs import log_train
 import numpy as np
 from math import log
+import matplotlib.pyplot as plt
+import os
+from tqdm import tqdm
 # Positional Encoding
 def get_angles(pos, i, d_model):
     angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
@@ -15,12 +19,12 @@ def positional_encoding(position, d_model):
     angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
     angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
     pos_encoding = angle_rads[np.newaxis, ...]
-    return tf.cast(pos_encoding, dtype=tf.float32)
+    return tf.cast(pos_encoding, dtype=tf.int32)
 
 # Scaled Dot Product Attention
 def scaled_dot_product_attention(q, k, v, mask):
     matmul_qk = tf.matmul(q, k, transpose_b=True)
-    dk = tf.cast(tf.shape(k)[-1], tf.float32)
+    dk = tf.cast(tf.shape(k)[-1], tf.int32)
     scaled_attention_logits = matmul_qk / tf.math.sqrt(dk)
     if mask is not None:
         scaled_attention_logits += (mask * -1e9)
@@ -30,6 +34,11 @@ def scaled_dot_product_attention(q, k, v, mask):
 
 # Multi-head Attention
 class MultiHeadAttention(layers.Layer):
+    """
+    Class that allows the model to focus on different positions of the input sequence simultaneously, 
+    capturing various aspects of the sequence. 
+    It does this by splitting the input into multiple "heads" and applying the attention mechanism to each head independently before recombining the results. This allows the model to capture various types of information from different positions of the input.
+    """
     def __init__(self, d_model, num_heads, embedding=None):
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads
@@ -159,7 +168,14 @@ class Decoder(layers.Layer):
 # Transformer
 class Transformer(tf.keras.Model):
     """
-    Intialization transformer layer. Contain Encoder, Decoder and MultiHeadAttention.
+    The Transformer class is a model that uses multi-head attention mechanisms.
+    It contains an Encoder, a Decoder, and a final Dense layer that are all applied in sequence.
+    This class also includes methods for fitting the model to data, saving the model, and creating masks for the input data.
+    
+    Usage
+    ```python
+    transformer = Transformer(num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None)
+    ```
     """
     def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None):
         super(Transformer, self).__init__()
@@ -192,51 +208,72 @@ class Transformer(tf.keras.Model):
         Saving model with safetensors extension.
         >>> transformer.save_model(model, name)
         """
-        from safetensors.tensorflow import save_file
-        save_file(model, name)
+        from safetensors.tensorflow import save_model
+        save_model(model, name + '.safetensors')
         return
+    
 
-    def fit_model(self, train_english, train_russian, valid_english, valid_russian, epochs, model_name, save_model_each_epoch=False, logs=True, logs_path= '/logs/plots'):
+    @tf.function
+    def fit_model(self, train_english, train_russian, valid_english, 
+                  valid_russian, epochs, model_name, 
+                    save_model_each_epoch=False, 
+                    logs=True, logs_path= '/logs/plots', callback=None):
         """
-        Fit the model to the data and save the model.
-        """
-        import matplotlib.pyplot as plt
-        import os
+        Training the model and save it.
 
-        for epoch in range(epochs):
+        Usage:
+        ```python
+        model = Transformer() # Settings of transformer
+
+
+        epochs = 50
+        model.fit_model(train_english, 
+                                train_russian,
+                                valid_english,
+                                valid_russian,
+                                epochs=epochs,
+                                save_model_each_epoch=True,
+                                logs=True,
+                                model_name='novelsdreamer-ru-t4m')
+                
+        ```
+        """
+        # Create a log file
+        log_file_name = 'training_logs.txt'
+        log_file = open(os.path.join('logs', 'train', log_file_name), "w")
+
+        for epoch in tqdm(range(epochs)):
             # Ensure the data is in the correct format before creating masks
-            train_english_int = tf.strings.as_string(tf.cast(train_english, tf.int32), precision=-1, scientific=False)
-            train_russian_int = tf.strings.as_string(tf.cast(train_russian, tf.int32), precision=-1, scientific=False)
-            enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_int, train_russian_int)
-            predictions, _ = self.call(train_english_int, train_russian_int, True, enc_padding_mask, combined_mask, dec_padding_mask)
-            loss = self.loss_function(train_russian_int, predictions)
+            train_english_tensor = tf.constant(train_english, dtype=tf.int32)
+            train_russian_tensor = tf.constant(train_russian, dtype=tf.int32)
+            enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_tensor, train_russian_tensor)
+            predictions, _ = self.call(train_english_tensor, train_russian_tensor, True, enc_padding_mask, combined_mask, dec_padding_mask)
+            loss = self.loss(train_russian_tensor, predictions)
             gradients = self.tape.gradient(loss, self.trainable_variables)
             self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+            self.metrics.update_state(train_russian_tensor, predictions)
             
             # Validation
-            valid_english_int = tf.strings.as_string(tf.cast(valid_english, tf.int32), precision=-1, scientific=False)
-            valid_russian_int = tf.strings.as_string(tf.cast(valid_russian, tf.int32), precision=-1, scientific=False)
-            enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(valid_english_int, valid_russian_int)
-            predictions_valid, _ = self.call(valid_english_int, valid_russian_int, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
-            loss_valid = self.loss_function(valid_russian_int, predictions_valid)
-            print('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch + 1, loss, loss_valid))
+            valid_english_tensor = tf.constant(valid_english, dtype=tf.int32)
+            valid_russian_tensor = tf.constant(valid_russian, dtype=tf.int32)
+            enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(valid_english_tensor, valid_russian_tensor)
+            predictions_valid, _ = self.call(valid_english_tensor, valid_russian_tensor, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
+            loss_valid = self.loss(valid_russian_tensor, predictions_valid)
+            self.metrics.update_state(valid_russian_tensor, predictions_valid)
+            epoch += 1
+            print('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))
+            log_file.write('Epoch {} Loss {:.4f} Validation Loss {:.4f}\n'.format(epoch, loss, loss_valid))  # Save logs to file
+            print(f'Epoch {epoch} finished.')
+            if callback is not None:
+                callback()
             if logs:
-                # Plotting and saving dot diagram
-                plt.figure(figsize=(10, 5))
-                plt.plot(predictions_valid, 'ro')
-                plt.title('Dot Diagram of Predictions')
-                plt.xlabel('Index')
-                plt.ylabel('Prediction')
-                plt.grid(True)
-                if not os.path.exists('plots'):
-                    os.makedirs('plots')
-                plt.savefig(os.path.join(logs_path ,f'plots/dot_diagram_epoch_{epoch+1}.png'))
-                plt.close()
+                log_train(predictions_valid, logs_path, epoch)
+                
 
             if save_model_each_epoch:
-                epoch += 1
-                
                 self.save_model(self, f'{model_name}_epoch_{epoch+1}')
+
+
         
         # Save the model after training
         try:
@@ -245,6 +282,7 @@ class Transformer(tf.keras.Model):
         except:
             print('Happened an error during saving final weights.')
             
+        log_file.close()  # Close the log file
         return self
 
     def create_masks(self, inp, tar):
@@ -273,4 +311,3 @@ class Transformer(tf.keras.Model):
         """
         mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
         return mask
-
