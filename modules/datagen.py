@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.data import Dataset
 
 class DataGenerator:
     """
@@ -20,7 +21,7 @@ class DataGenerator:
         self.padding_type = padding_type
         self.trunc_type = trunc_type
 
-
+    #Load files and classes.
     def load_data(self, dir_name):
         data = {}
         for class_name in os.listdir(dir_name):
@@ -30,8 +31,8 @@ class DataGenerator:
             data[class_name] = []
             for filename in os.listdir(class_dir):
                 if os.path.isfile(os.path.join(class_dir, filename)):
-                    with open(os.path.join(class_dir, filename), 'r') as f:
-                        data[class_name].append(f.read())
+                    with open(os.path.join(class_dir, filename), 'r', encoding='utf-8') as f:
+                        data[class_name].extend(f.read().splitlines())
         return data
 
     def prepare_data(self, data):
@@ -41,7 +42,7 @@ class DataGenerator:
             sequences = tokenizer.texts_to_sequences(data[class_name])
             if sequences:
                 padded = pad_sequences(sequences, padding=self.padding_type, truncating=self.trunc_type)
-                data[class_name] = [tf.expand_dims(p, -1) for p in padded]  # Add an extra dimension at the end to avoid ValueError
+                data[class_name] = [tf.constant(p, dtype=tf.int32) for p in padded]  # Add an extra dimension at the end to avoid ValueError
         print(data)
         return data
 
@@ -51,6 +52,8 @@ class DataGenerator:
         Do main process of converting tensors.
         Usage:
         >>> (train_english, train_russian), (valid_english, valid_russian) = datagen.generate()
+        Returns:
+        Tuple of two dictionaries. Each dictionary contains class names as keys and lists of tensors as values. Tensors are of dtype int32.
         """
         train_data = self.load_data(self.train_dir)
         valid_data = self.load_data(self.valid_dir)
@@ -63,4 +66,8 @@ class DataGenerator:
         print(f"Train data info: {len(train_data.keys())} classes, {sum([len(v) for v in train_data.values()])} samples")
         print(f"Valid data info: {len(valid_data.keys())} classes, {sum([len(v) for v in valid_data.values()])} samples")
 
-        return (train_data, valid_data)
+        # Convert the data to TensorFlow Datasets
+        train_data = {k: Dataset.from_tensor_slices(v) for k, v in train_data.items()}
+        valid_data = {k: Dataset.from_tensor_slices(v) for k, v in valid_data.items()}
+
+        return ((train_data['english'], train_data['russian']), (valid_data['english'], valid_data['russian']))
