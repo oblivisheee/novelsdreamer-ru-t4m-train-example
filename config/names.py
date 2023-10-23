@@ -1,2 +1,0 @@
-TRAIN_DATASET_END_DIR = 'train'
-VALID_DATASET_END_DIR = 'valid'
