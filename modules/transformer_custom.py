@@ -19,12 +19,12 @@ def positional_encoding(position, d_model):
     angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
     angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
     pos_encoding = angle_rads[np.newaxis, ...]
-    return tf.cast(pos_encoding, dtype=tf.int32)
+    return tf.cast(pos_encoding, dtype=tf.float32)
 
 # Scaled Dot Product Attention
 def scaled_dot_product_attention(q, k, v, mask):
     matmul_qk = tf.matmul(q, k, transpose_b=True)
-    dk = tf.cast(tf.shape(k)[-1], tf.int32)
+    dk = tf.cast(tf.shape(k)[-1], tf.float32)
     scaled_attention_logits = matmul_qk / tf.math.sqrt(dk)
     if mask is not None:
         scaled_attention_logits += (mask * -1e9)
@@ -202,22 +202,13 @@ class Transformer(tf.keras.Model):
             sequences = ordered[:k]
         return sequences
 
-    @staticmethod
-    def save_model(model, name):
-        """
-        Saving model with safetensors extension.
-        >>> transformer.save_model(model, name)
-        """
-        from safetensors.tensorflow import save_model
-        save_model(model, name + '.safetensors')
-        return
     
 
-    @tf.function
+    
     def fit_model(self, train_english, train_russian, valid_english, 
                   valid_russian, epochs, model_name, 
                     save_model_each_epoch=False, 
-                    logs=True, logs_path= '/logs/plots', callback=None):
+                    logs=True, logs_path= '/logs/plots', callback=None, save_path='results/trained_models'):
         """
         Training the model and save it.
 
@@ -240,44 +231,51 @@ class Transformer(tf.keras.Model):
         """
         # Create a log file
         log_file_name = 'training_logs.txt'
-        log_file = open(os.path.join('logs', 'train', log_file_name), "w")
+        log_file_path = os.path.join('logs', 'train', log_file_name)
+        # Check if the file already exists. If it does, append to it. If not, create a new file.
+        if os.path.isfile(log_file_path):
+            log_file = open(log_file_path, "a")
+        else:
+            log_file = open(log_file_path, "w")
 
-        for epoch in tqdm(range(epochs)):
+        for epoch in tqdm(range(1, epochs+1)):
             # Ensure the data is in the correct format before creating masks
-            train_english_tensor = tf.constant(train_english, dtype=tf.int32)
-            train_russian_tensor = tf.constant(train_russian, dtype=tf.int32)
+            train_english_tensor = tf.convert_to_tensor([x for x in train_english], dtype=tf.int32)
+            train_russian_tensor = tf.convert_to_tensor([x for x in train_russian], dtype=tf.int32)
             enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_tensor, train_russian_tensor)
-            predictions, _ = self.call(train_english_tensor, train_russian_tensor, True, enc_padding_mask, combined_mask, dec_padding_mask)
-            loss = self.loss(train_russian_tensor, predictions)
-            gradients = self.tape.gradient(loss, self.trainable_variables)
+            with tf.GradientTape() as tape:
+                predictions, _ = self.call(train_english_tensor, train_russian_tensor, True, enc_padding_mask, combined_mask, dec_padding_mask)
+                loss = self.loss(train_russian_tensor, predictions)
+            gradients = tape.gradient(loss, self.trainable_variables)
             self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-            self.metrics.update_state(train_russian_tensor, predictions)
+            if len(self.metrics) > 0:
+                self.metrics[0].update_state(train_russian_tensor, predictions)
             
             # Validation
-            valid_english_tensor = tf.constant(valid_english, dtype=tf.int32)
-            valid_russian_tensor = tf.constant(valid_russian, dtype=tf.int32)
+            valid_english_tensor = tf.convert_to_tensor([x for x in valid_english], dtype=tf.int32)
+            valid_russian_tensor = tf.convert_to_tensor([x for x in valid_russian], dtype=tf.int32)
             enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid = self.create_masks(valid_english_tensor, valid_russian_tensor)
             predictions_valid, _ = self.call(valid_english_tensor, valid_russian_tensor, False, enc_padding_mask_valid, combined_mask_valid, dec_padding_mask_valid)
             loss_valid = self.loss(valid_russian_tensor, predictions_valid)
-            self.metrics.update_state(valid_russian_tensor, predictions_valid)
-            epoch += 1
+            if len(self.metrics) > 1:
+                self.metrics[1].update_state(valid_russian_tensor, predictions_valid)
             print('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))
             log_file.write('Epoch {} Loss {:.4f} Validation Loss {:.4f}\n'.format(epoch, loss, loss_valid))  # Save logs to file
             print(f'Epoch {epoch} finished.')
             if callback is not None:
                 callback()
-            if logs:
-                log_train(predictions_valid, logs_path, epoch)
+            #if logs:
+            #   log_train(predictions_valid, logs_path, epoch)
                 
 
             if save_model_each_epoch:
-                self.save_model(self, f'{model_name}_epoch_{epoch+1}')
+                self.save_weights(save_path + f'{model_name}_epoch_{epoch+1}')
 
 
         
         # Save the model after training
         try:
-            self.save_model(self, model_name)
+            self.save_weights(save_path + model_name)
             print('Final weights saved.')
         except:
             print('Happened an error during saving final weights.')
