@@ -207,13 +207,7 @@ class Transformer(tf.keras.Model):
     def fit_model(self, train_english, train_russian, valid_english, 
                   valid_russian, epochs, model_name,
                     save_model_each_epoch=False, save_path_epoch='results/trained_models', final_save_path='results/final_weights'):
-        
-        if not os.path.exists('results'):
-            os.mkdir('results')
-        if not os.path.exists(save_path_epoch):
-            os.mkdir(save_path_epoch)
-        if not os.path.exists(final_save_path):
-            os.mkdir(final_save_path)
+            
         """
         Training the model and save it.
 
@@ -234,17 +228,26 @@ class Transformer(tf.keras.Model):
                 
         ```
         """
+        
+        if not os.path.exists('results'):
+            os.mkdir('results')
+        if not os.path.exists(save_path_epoch):
+            os.mkdir(save_path_epoch)
+        if not os.path.exists(final_save_path):
+            os.mkdir(final_save_path)
+
         # Create a log file
         log_file_name = 'training_logs.txt'
         log_file_path = os.path.join('logs', 'train', log_file_name)
-        # Check if the file already exists. If it does, append to it. If not, create a new file.
+        # Check if the file already exists. If it does, clear it. If not, create a new file.
         if os.path.isfile(log_file_path):
-            log_file = open(log_file_path, "a")
+            log_file = open(log_file_path, "w")
         else:
             log_file = open(log_file_path, "w")
 
+        
         for epoch in tqdm(range(epochs)):
-            epoch += 1  # Fix counting of epochs
+            epoch += 1
             # Ensure the data is in the correct format before creating masks
             train_english_tensor = tf.convert_to_tensor([x for x in train_english], dtype=tf.int32)
             train_russian_tensor = tf.convert_to_tensor([x for x in train_russian], dtype=tf.int32)
@@ -266,14 +269,13 @@ class Transformer(tf.keras.Model):
             if len(self.metrics) > 1:
                 self.metrics[1].update_state(valid_russian_tensor, predictions_valid)
             tf.compat.v1.logging.info('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))
-            log_file.write(f'Epoch {epoch} Loss {loss:.4f} Validation Loss {loss_valid:.4f}\n')  # Save logs to file
-            tf.compat.v1.logging.info(f'Epoch {epoch} finished.')
-            #if logs:
-            #   log_train(predictions_valid, logs_path, epoch)
-                
+            with open(log_file_path, 'a') as log_file:
+                log_file.write(f'Epoch {epoch} Loss {loss:.4f} Validation Loss {loss_valid:.4f}\n')  # Save logs to file
+            tf.compat.v1.logging.info(f'Epoch {epoch} finished.')               
 
             if save_model_each_epoch:
                 self.save_weights(os.path.join(save_path_epoch, f'{model_name}_epoch_{epoch}'))
+    
 
 
         
