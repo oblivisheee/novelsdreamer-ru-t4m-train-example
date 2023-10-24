@@ -11,7 +11,7 @@ def log_train(predictions_valid, logs_path, epoch):
     ```
     '''
     plt.figure(figsize=(10, 5))
-    plt.plot(predictions_valid, 'ro')
+    plt.plot(predictions_valid.flatten(), 'ro')  # Flatten the predictions to avoid ValueError
     plt.title('Dot Diagram of Predictions')
     plt.xlabel('Index')
     plt.ylabel('Prediction')

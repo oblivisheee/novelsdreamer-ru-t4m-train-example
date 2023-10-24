@@ -42,7 +42,7 @@ class DataGenerator:
             sequences = tokenizer.texts_to_sequences(data[class_name])
             if sequences:
                 padded = pad_sequences(sequences, padding=self.padding_type, truncating=self.trunc_type)
-                data[class_name] = [tf.constant(p, dtype=tf.int32) for p in padded]  # Add an extra dimension at the end to avoid ValueError
+                data[class_name] = [tf.constant(p, dtype=tf.float32) for p in padded]  # Add an extra dimension at the end to avoid ValueError
         print(data)
         return data
 

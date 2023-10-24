@@ -55,7 +55,7 @@ def trainer_config():
 trainer_config()
 
 def metrics_config():
-    path_to_config_of_train = os.path.join('config', 'optimizer_config.json')
+    path_to_config_of_train = os.path.join('config', 'metrics_config.json')
     config = {
         "accuracy_set":  'accuracy',
         "mean_sq_error": 'mse',
