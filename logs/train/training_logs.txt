@@ -1,9 +1,9 @@
 Train parameters:
-save_model_each_epoch={save_model_each_epoch}
-shuffle={shuffle}
-model_name={model_name}
-save_path_epoch={save_path_epoch}
-final_save_path={final_save_path}
+save_model_each_epoch=True
+shuffle=True
+model_name='novelsdreamer-ru-t4m'
+save_path_epoch='results/trained_models'
+final_save_path='results/final_weights'
 
-Epoch 1 Loss 10.9011 Validation Loss 10.6489
-Epoch 2 Loss 10.6006 Validation Loss 10.3357
+Epoch 1 Loss 10.8192 Validation Loss 10.6792
+Epoch 2 Loss 10.5669 Validation Loss 10.3448

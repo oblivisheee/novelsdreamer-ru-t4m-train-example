@@ -252,7 +252,7 @@ class Transformer(tf.keras.Model):
             log_file = open(log_file_path, "w")
         
         with open(log_file_path, 'a') as log_file:
-                log_file.write(f'Train parameters:\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name={model_name}\nsave_path_epoch={save_path_epoch}\nfinal_save_path={final_save_path}\n\n')
+                log_file.write(f"Train parameters:\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name='{model_name}'\nsave_path_epoch='{save_path_epoch}'\nfinal_save_path='{final_save_path}'\n\n")
 
         # Shuffle the training data
         if shuffle:
