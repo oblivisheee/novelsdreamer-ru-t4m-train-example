@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import random
 import numpy as np
 from math import log
 import matplotlib.pyplot as plt
@@ -206,7 +207,10 @@ class Transformer(tf.keras.Model):
     
     def fit_model(self, train_english, train_russian, valid_english, 
                   valid_russian, epochs, model_name,
-                    save_model_each_epoch=False, save_path_epoch='results/trained_models', final_save_path='results/final_weights'):
+                    save_model_each_epoch=True,
+                    shuffle=False,
+                    save_path_epoch='results/trained_models',
+                    final_save_path='results/final_weights'):
             
         """
         Training the model and save it.
@@ -223,8 +227,10 @@ class Transformer(tf.keras.Model):
                                 valid_russian,
                                 epochs=epochs,
                                 save_model_each_epoch=True,
-                                logs=True,
-                                model_name='novelsdreamer-ru-t4m')
+                                shuffle=False
+                                model_name='novelsdreamer-ru-t4m'
+                                save_path_epoch='results/trained_models',
+                                final_save_path='results/final_weights')
                 
         ```
         """
@@ -244,8 +250,18 @@ class Transformer(tf.keras.Model):
             log_file = open(log_file_path, "w")
         else:
             log_file = open(log_file_path, "w")
-
         
+        with open(log_file_path, 'a') as log_file:
+                log_file.write(f'Train parameters:\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name={model_name}\nsave_path_epoch={save_path_epoch}\nfinal_save_path={final_save_path}\n\n')
+
+        # Shuffle the training data
+        if shuffle:
+            combined = list(zip(train_english, train_russian))
+            random.shuffle(combined)
+            train_english, train_russian = zip(*combined)
+            train_english = list(train_english)
+            train_russian = list(train_russian)
+
         for epoch in tqdm(range(epochs)):
             epoch += 1
             # Ensure the data is in the correct format before creating masks

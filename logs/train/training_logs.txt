@@ -1,2 +1,9 @@
-Epoch 1 Loss 10.8632 Validation Loss 10.5644
-Epoch 2 Loss 10.5706 Validation Loss 10.3410
+Train parameters:
+save_model_each_epoch={save_model_each_epoch}
+shuffle={shuffle}
+model_name={model_name}
+save_path_epoch={save_path_epoch}
+final_save_path={final_save_path}
+
+Epoch 1 Loss 10.9011 Validation Loss 10.6489
+Epoch 2 Loss 10.6006 Validation Loss 10.3357
