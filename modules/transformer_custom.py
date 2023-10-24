@@ -1,7 +1,6 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from modules.logs import log_train
 import numpy as np
 from math import log
 import matplotlib.pyplot as plt
@@ -206,9 +205,15 @@ class Transformer(tf.keras.Model):
 
     
     def fit_model(self, train_english, train_russian, valid_english, 
-                  valid_russian, epochs, model_name, 
-                    save_model_each_epoch=False, 
-                    logs=True, logs_path= '/logs/plots', callback=None, save_path='results/trained_models'):
+                  valid_russian, epochs, model_name,
+                    save_model_each_epoch=False, save_path_epoch='results/trained_models', final_save_path='results/final_weights'):
+        
+        if not os.path.exists('results'):
+            os.mkdir('results')
+        if not os.path.exists(save_path_epoch):
+            os.mkdir(save_path_epoch)
+        if not os.path.exists(final_save_path):
+            os.mkdir(final_save_path)
         """
         Training the model and save it.
 
@@ -238,7 +243,8 @@ class Transformer(tf.keras.Model):
         else:
             log_file = open(log_file_path, "w")
 
-        for epoch in tqdm(range(1, epochs+1)):
+        for epoch in tqdm(range(epochs)):
+            epoch += 1  # Fix counting of epochs
             # Ensure the data is in the correct format before creating masks
             train_english_tensor = tf.convert_to_tensor([x for x in train_english], dtype=tf.int32)
             train_russian_tensor = tf.convert_to_tensor([x for x in train_russian], dtype=tf.int32)
@@ -259,26 +265,24 @@ class Transformer(tf.keras.Model):
             loss_valid = self.loss(valid_russian_tensor, predictions_valid)
             if len(self.metrics) > 1:
                 self.metrics[1].update_state(valid_russian_tensor, predictions_valid)
-            print('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))
-            log_file.write('Epoch {} Loss {:.4f} Validation Loss {:.4f}\n'.format(epoch, loss, loss_valid))  # Save logs to file
-            print(f'Epoch {epoch} finished.')
-            if callback is not None:
-                callback()
+            tf.compat.v1.logging.info('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))
+            log_file.write(f'Epoch {epoch} Loss {loss:.4f} Validation Loss {loss_valid:.4f}\n')  # Save logs to file
+            tf.compat.v1.logging.info(f'Epoch {epoch} finished.')
             #if logs:
             #   log_train(predictions_valid, logs_path, epoch)
                 
 
             if save_model_each_epoch:
-                self.save_weights(save_path + f'{model_name}_epoch_{epoch+1}')
+                self.save_weights(os.path.join(save_path_epoch, f'{model_name}_epoch_{epoch}'))
 
 
         
         # Save the model after training
         try:
-            self.save_weights(save_path + model_name)
-            print('Final weights saved.')
+            self.save_weights(os.path.join(final_save_path, model_name))
+            tf.compat.v1.logging.info('Final weights saved.')
         except:
-            print('Happened an error during saving final weights.')
+            tf.compat.v1.logging.error('Happened an error during saving final weights.')
             
         log_file.close()  # Close the log file
         return self
