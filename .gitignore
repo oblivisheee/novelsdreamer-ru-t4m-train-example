@@ -6,3 +6,5 @@ __pycache__/transformer_custom.cpython-311.pyc
 archive
 Dockerfile
 results
+logs
+logs/train/training_logs.txt
