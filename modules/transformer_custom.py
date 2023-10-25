@@ -169,24 +169,27 @@ class Decoder(layers.Layer):
 class Transformer(tf.keras.Model):
     """
     The Transformer class is a model that uses multi-head attention mechanisms.
-    It contains an Encoder, a Decoder, and a final Dense layer that are all applied in sequence.
+    It contains an Encoder, a Decoder, a final Dense layer, and a Regularized Layer that are all applied in sequence.
     This class also includes methods for fitting the model to data, saving the model, and creating masks for the input data.
     
     Usage
     ```python
-    transformer = Transformer(num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None)
+    transformer = Transformer(num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None, regularized_layer=None)
     ```
     """
-    def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None):
+    def __init__(self, num_layers, d_model, num_heads, dff, input_vocab_size, target_vocab_size, pe_input, pe_target, rate=0.1, embedding=None, regularized_layer=None):
         super(Transformer, self).__init__()
         self.encoder = Encoder(num_layers, d_model, num_heads, dff, input_vocab_size, pe_input, rate, embedding)
         self.decoder = Decoder(num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, embedding)
         self.final_layer = tf.keras.layers.Dense(target_vocab_size)
+        self.regularized_layer = regularized_layer if regularized_layer is not None else tf.keras.layers.Layer()
 
     def call(self, inp, tar, training, enc_padding_mask, look_ahead_mask, dec_padding_mask):
         enc_output = self.encoder(inp, training, enc_padding_mask)
         dec_output, attention_weights = self.decoder(tar, enc_output, training, look_ahead_mask, dec_padding_mask)
         final_output = self.final_layer(dec_output)
+        if self.regularized_layer is not None:
+            final_output = self.regularized_layer(final_output)
         return final_output, attention_weights
 
     def beam_search_decoder(self, data, k):
@@ -196,8 +199,10 @@ class Transformer(tf.keras.Model):
             for i in range(len(sequences)):
                 seq, score = sequences[i]
                 for j in range(len(row)):
-                    candidate = [seq + [j], score * -log(row[j])]
-                    all_candidates.append(candidate)
+                    # Check if row[j] can be converted to float and is not negative before applying log
+                    if isinstance(row[j], (int, float)) and float(row[j]) > 0:
+                        candidate = [seq + [j], score * -log(float(row[j]))]
+                        all_candidates.append(candidate)
             ordered = sorted(all_candidates, key=lambda tup:tup[1])
             sequences = ordered[:k]
         return sequences
@@ -208,8 +213,8 @@ class Transformer(tf.keras.Model):
     def fit_model(self, train_english, train_russian, valid_english, 
                   valid_russian, epochs, model_name,
                     save_model_each_epoch=True,
-                    shuffle=False,
-                    save_path_epoch='results/trained_models',
+                    shuffle=False, session_name=str,
+                    save_path_epoch=f'results/trained_models',
                     final_save_path='results/final_weights'):
             
         """
@@ -234,25 +239,19 @@ class Transformer(tf.keras.Model):
                 
         ```
         """
-        
-        if not os.path.exists('results'):
-            os.mkdir('results')
-        if not os.path.exists(save_path_epoch):
-            os.mkdir(save_path_epoch)
-        if not os.path.exists(final_save_path):
-            os.mkdir(final_save_path)
+        directories = [session_name, os.path.join(session_name, 'results'), os.path.join(session_name, save_path_epoch), os.path.join(session_name, final_save_path), os.path.join(session_name, 'logs'), os.path.join(session_name, 'logs', 'train'), os.path.join(session_name, 'logs', 'inference')]
+        for directory in directories:
+            if not os.path.exists(directory):
+                os.makedirs(directory)
 
         # Create a log file
-        log_file_name = 'training_logs.txt'
-        log_file_path = os.path.join('logs', 'train', log_file_name)
+        log_file_name = f'training_logs_{session_name}.txt'
+        log_file_path = os.path.join(session_name, 'logs', 'train', log_file_name)
         # Check if the file already exists. If it does, clear it. If not, create a new file.
-        if os.path.isfile(log_file_path):
-            log_file = open(log_file_path, "w")
-        else:
-            log_file = open(log_file_path, "w")
+        log_file = open(log_file_path, "w")
         
         with open(log_file_path, 'a') as log_file:
-                log_file.write(f"Train parameters:\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name='{model_name}'\nsave_path_epoch='{save_path_epoch}'\nfinal_save_path='{final_save_path}'\n\n")
+                log_file.write(f"Train parameters:\nsession_name='{session_name}'\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name='{model_name}'\nsave_path_epoch='{save_path_epoch}'\nfinal_save_path='{final_save_path}'\n\n")
 
         # Shuffle the training data
         if shuffle:
@@ -284,21 +283,31 @@ class Transformer(tf.keras.Model):
             loss_valid = self.loss(valid_russian_tensor, predictions_valid)
             if len(self.metrics) > 1:
                 self.metrics[1].update_state(valid_russian_tensor, predictions_valid)
-            tf.compat.v1.logging.info('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))
+            tf.compat.v1.logging.info('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))# Beam search
+            beam_search_result = self.beam_search_decoder(predictions_valid.numpy().tolist()[0], 3)
+            tf.compat.v1.logging.info(f'Beam search result: {beam_search_result}')
             with open(log_file_path, 'a') as log_file:
-                log_file.write(f'Epoch {epoch} Loss {loss:.4f} Validation Loss {loss_valid:.4f}\n')  # Save logs to file
+                log_file.write(f'Epoch {epoch} Loss {loss:.4f} Validation Loss {loss_valid:.4f}\nBeam search results: {beam_search_result}\n')  # Save logs to file
+            
             tf.compat.v1.logging.info(f'Epoch {epoch} finished.')               
 
             if save_model_each_epoch:
-                self.save_weights(os.path.join(save_path_epoch, f'{model_name}_epoch_{epoch}'))
-    
+                way_to_save_time = os.path.join(session_name, save_path_epoch, f'{model_name}_epoch_{epoch}')
+                try:
+                    self.save_weights(way_to_save_time+'.h5')
+                    tf.compat.v1.logging.info(f'Model of {epoch} epoch saved in {way_to_save_time}')
+                except Exception as e:
+                    print(f'Save Error:{e}')
+                way_to_save_time = None
+            
 
 
         
         # Save the model after training
         try:
-            self.save_weights(os.path.join(final_save_path, model_name))
-            tf.compat.v1.logging.info('Final weights saved.')
+            if final_save_path is not None and model_name is not None:
+                self.save_weights(os.path.join(final_save_path, model_name+'.h5'))
+                tf.compat.v1.logging.info(f'Final weights saved. Model trained on {epochs} epochs.\n Logs you can find in {log_file_path}.\n Model saved in {final_save_path}.')
         except:
             tf.compat.v1.logging.error('Happened an error during saving final weights.')
             

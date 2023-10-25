@@ -20,7 +20,13 @@ class DataGenerator:
         self.valid_dir = valid_dir
         self.padding_type = padding_type
         self.trunc_type = trunc_type
-
+        # if not os.path.exists('logs'):
+        #    os.mkdir('logs')
+        #if not os.path.exists('logs/train'):
+        #    os.mkdir('logs/train')
+        #log_file_name = f'dataset_logs_{session_name}.txt'
+        #self.log_file_path = os.path.join('logs', 'train', log_file_name)
+        #log_file = open(self.log_file_path, "w"
     #Load files and classes.
     def load_data(self, dir_name):
         data = {}
@@ -33,6 +39,9 @@ class DataGenerator:
                 if os.path.isfile(os.path.join(class_dir, filename)):
                     with open(os.path.join(class_dir, filename), 'r', encoding='utf-8') as f:
                         data[class_name].extend(f.read().splitlines())
+
+
+            
         return data
 
     def prepare_data(self, data):
@@ -43,9 +52,10 @@ class DataGenerator:
             if sequences:
                 padded = pad_sequences(sequences, padding=self.padding_type, truncating=self.trunc_type)
                 data[class_name] = [tf.constant(p, dtype=tf.float32) for p in padded]  # Add an extra dimension at the end to avoid ValueError
-        print(data)
+                
         return data
-
+# with open(self.log_file_path, 'a') as log_file:
+#    log_file.write(data)
 
     def generate(self):
         """
@@ -53,7 +63,7 @@ class DataGenerator:
         Usage:
         >>> (train_english, train_russian), (valid_english, valid_russian) = datagen.generate()
         Returns:
-        Tuple of two dictionaries. Each dictionary contains class names as keys and lists of tensors as values. Tensors are of dtype int32.
+        Tuple of two dictionaries. Each dictionary contains class names as keys and lists of tensors as values. Tensors are of dtype float32.
         """
         train_data = self.load_data(self.train_dir)
         valid_data = self.load_data(self.valid_dir)
@@ -62,6 +72,7 @@ class DataGenerator:
 
         train_data = {k: v for k, v in train_data.items() if len(v) > 0}
         valid_data = {k: v for k, v in valid_data.items() if len(v) > 0}
+
 
         print(f"Train data info: {len(train_data.keys())} classes, {sum([len(v) for v in train_data.values()])} samples")
         print(f"Valid data info: {len(valid_data.keys())} classes, {sum([len(v) for v in valid_data.values()])} samples")

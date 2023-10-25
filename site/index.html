@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Oleg's Portfolio</title>
+  <style>
+    /* General Styles */
+    body, html {
+      margin: 0;
+      padding: 0;
+      font-family: 'Arial', sans-serif;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(to right, #007BFF, #0056b3);
+      color: white;
+      padding: 1em 0;
+      text-align: center;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    /* Gradient Panel */
+    .gradient-panel {
+      background: linear-gradient(to bottom right, #e0eafc, #cfd9fc);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    }
+
+    /* Sections */
+    section {
+      margin: 20px 0;
+      padding: 20px;
+      border-radius: 8px;
+      background: white;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+
+    /* Button */
+    .btn {
+      background: #007BFF;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .btn:hover {
+      background: #0056b3;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <h1>Oleg's Portfolio</h1>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container">
+
+    <!-- About Section -->
+    <section id="about" class="gradient-panel">
+      <h2>About Me</h2>
+      <p>My name is Oleg. I am passionate about Machine Learning and Deep Learning.</p>
+    </section>
+
+    <!-- Projects Section -->
+    <section id="projects">
+      <h2>Projects</h2>
+      
+      <!-- Gradient Panel for Project -->
+      <div class="gradient-panel">
+        <h3>AI Model for Translating Novels</h3>
+        <p>I am currently working on an AI project that aims to translate novels from English to Russian. The goal is to make literature more accessible and bridge the language gap.</p>
+        <button class="btn">Learn More</button>
+      </div>
+      
+    </section>
+
+  </div>
+
+</body>
+</html>

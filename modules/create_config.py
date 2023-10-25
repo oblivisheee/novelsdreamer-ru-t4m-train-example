@@ -30,36 +30,14 @@ def transformer_config():
             json.dump(config, f)
     return config
 
-def trainer_config():
-    path_to_config_of_train = os.path.join('config', 'train_config.json')
-    config = {
-        "learning_rate":  0.001,
-        "loss_reduction": 'auto',
-        "epoch_train": 30, 
-    }
-
-    os.makedirs(os.path.dirname(path_to_config_of_train), exist_ok=True)
-
-    if not os.path.isfile(path_to_config_of_train):
-        with open(path_to_config_of_train, 'w') as f:
-            json.dump(config, f)
-
-    try:
-        with open(path_to_config_of_train, 'r') as f:
-            config = json.load(f)
-    except FileNotFoundError:
-        with open(path_to_config_of_train, 'w') as f:
-            json.dump(config, f)
-    return config
-
-trainer_config()
 
 def metrics_config():
     path_to_config_of_train = os.path.join('config', 'metrics_config.json')
     config = {
         "accuracy_set":  'accuracy',
         "mean_sq_error": 'mse',
-        "precision": 'precision'
+        "precision": 'precision',
+        "thresholds": 0.5
     }
 
     os.makedirs(os.path.dirname(path_to_config_of_train), exist_ok=True)
@@ -76,5 +54,4 @@ def metrics_config():
             json.dump(config, f)
     return config
 
-trainer_config()
 
