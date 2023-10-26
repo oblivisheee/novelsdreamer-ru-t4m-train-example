@@ -15,18 +15,16 @@ class DataGenerator:
 
     
     """
-    def __init__(self, train_dir, valid_dir, padding_type='post', trunc_type='post'):
+    def __init__(self, main_dir, train_dir, valid_dir, padding_type='post', trunc_type='post', session_name=str):
         self.train_dir = train_dir
         self.valid_dir = valid_dir
         self.padding_type = padding_type
         self.trunc_type = trunc_type
-        # if not os.path.exists('logs'):
-        #    os.mkdir('logs')
-        #if not os.path.exists('logs/train'):
-        #    os.mkdir('logs/train')
-        #log_file_name = f'dataset_logs_{session_name}.txt'
-        #self.log_file_path = os.path.join('logs', 'train', log_file_name)
-        #log_file = open(self.log_file_path, "w"
+        if not os.path.exists(os.path.join(main_dir, 'logs')):
+            os.mkdir(os.path.join(main_dir, 'logs'))
+        log_file_name = f'dataset_logs_{session_name}.txt'
+        self.log_file_path = os.path.join(main_dir, 'logs', log_file_name)
+        log_file = open(self.log_file_path, "w")
     #Load files and classes.
     def load_data(self, dir_name):
         data = {}
@@ -52,10 +50,11 @@ class DataGenerator:
             if sequences:
                 padded = pad_sequences(sequences, padding=self.padding_type, truncating=self.trunc_type)
                 data[class_name] = [tf.constant(p, dtype=tf.float32) for p in padded]  # Add an extra dimension at the end to avoid ValueError
+        with open(self.log_file_path, 'a') as log_file:
+            log_file.write(str(data))
                 
         return data
-# with open(self.log_file_path, 'a') as log_file:
-#    log_file.write(data)
+
 
     def generate(self):
         """
@@ -76,6 +75,9 @@ class DataGenerator:
 
         print(f"Train data info: {len(train_data.keys())} classes, {sum([len(v) for v in train_data.values()])} samples")
         print(f"Valid data info: {len(valid_data.keys())} classes, {sum([len(v) for v in valid_data.values()])} samples")
+        with open(self.log_file_path, 'a') as log_file:
+            log_file.write(f"\nTrain data info: {len(train_data.keys())} classes, {sum([len(v) for v in train_data.values()])} samples\n")
+            log_file.write(f"Valid data info: {len(valid_data.keys())} classes, {sum([len(v) for v in valid_data.values()])} samples\n")
 
         # Convert the data to TensorFlow Datasets
         train_data = {k: Dataset.from_tensor_slices(v) for k, v in train_data.items()}
