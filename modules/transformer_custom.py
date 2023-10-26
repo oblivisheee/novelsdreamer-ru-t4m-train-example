@@ -209,14 +209,14 @@ class Transformer(tf.keras.Model):
 
     
 
-    
+    @tf.keras.mixed_precision.experimental.policy('mixed_float16')
     def fit_model(self, train_english, train_russian, valid_english, 
-                  valid_russian, epochs, model_name,
-                    save_model_each_epoch=True,
-                    shuffle=False, session_name=str,
-                    save_path_epoch=f'results/trained_models',
-                    final_save_path='results/final_weights'):
-            
+                  valid_russian, epochs=int, model_name=str,
+                  save_model_each_epoch=True,
+                  shuffle=False, session_name=str,
+                  save_path_epoch='results/epoch_models',
+                  final_save_path='results/final_weights',
+                  batch_size=32, gradient_accumulation_steps=1):
         """
         Training the model and save it.
 
@@ -227,15 +227,15 @@ class Transformer(tf.keras.Model):
 
         epochs = 50
         model.fit_model(train_english, 
-                                train_russian,
-                                valid_english,
-                                valid_russian,
-                                epochs=epochs,
-                                save_model_each_epoch=True,
-                                shuffle=False
-                                model_name='novelsdreamer-ru-t4m'
-                                save_path_epoch='results/trained_models',
-                                final_save_path='results/final_weights')
+                        train_russian,
+                        valid_english,
+                        valid_russian,
+                        epochs=epochs,
+                        save_model_each_epoch=True,
+                        shuffle=False
+                        model_name='novelsdreamer-ru-t4m'
+                        save_path_epoch='results/trained_models',
+                        final_save_path='results/final_weights')
                 
         ```
         """
@@ -251,7 +251,7 @@ class Transformer(tf.keras.Model):
         log_file = open(log_file_path, "w")
         
         with open(log_file_path, 'a') as log_file:
-                log_file.write(f"Train parameters:\nsession_name='{session_name}'\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name='{model_name}'\nsave_path_epoch='{save_path_epoch}'\nfinal_save_path='{final_save_path}'\n\n")
+            log_file.write(f"Train parameters:\nsession_name='{session_name}'\nsave_model_each_epoch={save_model_each_epoch}\nshuffle={shuffle}\nmodel_name='{model_name}'\nsave_path_epoch='{save_path_epoch}'\nfinal_save_path='{final_save_path}'\n\n")
 
         # Shuffle the training data
         if shuffle:
@@ -261,19 +261,42 @@ class Transformer(tf.keras.Model):
             train_english = list(train_english)
             train_russian = list(train_russian)
 
+        num_batches = len(train_english) // batch_size
+        remainder = len(train_english) % batch_size
+        if remainder > 0:
+            num_batches += 1
+
         for epoch in tqdm(range(epochs)):
             epoch += 1
             # Ensure the data is in the correct format before creating masks
             train_english_tensor = tf.convert_to_tensor([x for x in train_english], dtype=tf.int32)
             train_russian_tensor = tf.convert_to_tensor([x for x in train_russian], dtype=tf.int32)
             enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(train_english_tensor, train_russian_tensor)
-            with tf.GradientTape() as tape:
-                predictions, _ = self.call(train_english_tensor, train_russian_tensor, True, enc_padding_mask, combined_mask, dec_padding_mask)
-                loss = self.loss(train_russian_tensor, predictions)
-            gradients = tape.gradient(loss, self.trainable_variables)
-            self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
-            if len(self.metrics) > 0:
-                self.metrics[0].update_state(train_russian_tensor, predictions)
+            
+            total_loss = 0
+            for batch in range(num_batches):
+                start = batch * batch_size
+                end = start + batch_size
+                if end > len(train_english):
+                    end = len(train_english)
+                train_english_batch = train_english_tensor[start:end]
+                train_russian_batch = train_russian_tensor[start:end]
+                enc_padding_mask_batch = enc_padding_mask[start:end]
+                combined_mask_batch = combined_mask[start:end]
+                dec_padding_mask_batch = dec_padding_mask[start:end]
+                
+                with tf.GradientTape() as tape:
+                    predictions, _ = self.call(train_english_batch, train_russian_batch, True, enc_padding_mask_batch, combined_mask_batch, dec_padding_mask_batch)
+                    loss = self.loss(train_russian_batch, predictions)
+                    total_loss += loss
+                
+                if (batch + 1) % gradient_accumulation_steps == 0:
+                    gradients = tape.gradient(total_loss, self.trainable_variables)
+                    self.optimizer.apply_gradients(zip(gradients, self.trainable_variables))
+                    total_loss = 0
+                
+                if len(self.metrics) > 0:
+                    self.metrics[0].update_state(train_russian_batch, predictions)
             
             # Validation
             valid_english_tensor = tf.convert_to_tensor([x for x in valid_english], dtype=tf.int32)
@@ -283,11 +306,11 @@ class Transformer(tf.keras.Model):
             loss_valid = self.loss(valid_russian_tensor, predictions_valid)
             if len(self.metrics) > 1:
                 self.metrics[1].update_state(valid_russian_tensor, predictions_valid)
-            tf.compat.v1.logging.info('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, loss, loss_valid))# Beam search
+            tf.compat.v1.logging.info('Epoch {} Loss {:.4f} Validation Loss {:.4f}'.format(epoch, total_loss, loss_valid))# Beam search
             beam_search_result = self.beam_search_decoder(predictions_valid.numpy().tolist()[0], 3)
             tf.compat.v1.logging.info(f'Beam search result: {beam_search_result}')
             with open(log_file_path, 'a') as log_file:
-                log_file.write(f'Epoch {epoch} Loss {loss:.4f} Validation Loss {loss_valid:.4f}\nBeam search results: {beam_search_result}\n')  # Save logs to file
+                log_file.write(f'Epoch {epoch} Loss {total_loss:.4f} Validation Loss {loss_valid:.4f}\nBeam search results: {beam_search_result}\n')  # Save logs to file
             
             tf.compat.v1.logging.info(f'Epoch {epoch} finished.')               
 
@@ -306,7 +329,7 @@ class Transformer(tf.keras.Model):
         # Save the model after training
         try:
             if final_save_path is not None and model_name is not None:
-                self.save_weights(os.path.join(final_save_path, model_name+'.h5'))
+                self.save_weights(os.path.join(session_name, final_save_path, model_name+'.h5'))
                 tf.compat.v1.logging.info(f'Final weights saved. Model trained on {epochs} epochs.\n Logs you can find in {log_file_path}.\n Model saved in {final_save_path}.')
         except:
             tf.compat.v1.logging.error('Happened an error during saving final weights.')
